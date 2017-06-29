@@ -25,6 +25,7 @@ import wifiphisher.common.firewall as firewall
 import wifiphisher.common.accesspoint as accesspoint
 import wifiphisher.common.tui as tui
 
+
 # Fixes UnicodeDecodeError for ESSIDs
 reload(sys)
 sys.setdefaultencoding('utf8')
@@ -499,9 +500,11 @@ class WifiphisherEngine:
         # EM depends on Network Manager.
         # It has to shutdown first.
         self.em.on_exit()
+        # move the access_points.on_exit before the exit for
+        # network manager
+        self.access_point.on_exit()
         self.network_manager.on_exit()
         self.template_manager.on_exit()
-        self.access_point.on_exit()
         self.fw.on_exit()
 
         if os.path.isfile('/tmp/wifiphisher-webserver.tmp'):
@@ -525,6 +528,10 @@ class WifiphisherEngine:
         if not args.internetinterface:
             kill_interfering_procs()
 
+        # check if it is required to add virtual interface
+        # is_freq_hop_allowed can be passed to the extension
+        # manager to determine if frequecy hopping is allowed
+        is_freq_hop_allowed = interfaces.check_add_vif(args)
         self.network_manager.start()
 
         # TODO: We should have more checks here:
@@ -556,6 +563,9 @@ class WifiphisherEngine:
                     "attack\n[{0}+{1}] Selecting {0}{3}{1} interface for creating the "
                     "rogue Access Point").format(
                     G, W, mon_iface, ap_iface)
+                # down the interface and up them when required
+                self.network_manager.down_interface(mon_iface)
+                self.network_manager.down_interface(ap_iface)
 
                 # randomize the mac addresses
                 if not args.no_mac_randomization:
@@ -578,6 +588,7 @@ class WifiphisherEngine:
                 else:
                     ap_iface = self.network_manager.get_interface(True, False)
                 mon_iface = ap_iface
+                self.network_manager.down_interface(ap_iface)
 
                 if not args.no_mac_randomization:
                     if args.mac_ap_interface:
@@ -605,7 +616,6 @@ class WifiphisherEngine:
 
             time.sleep(1)
             self.stop()
-
         if not args.no_mac_randomization:
             ap_mac = self.network_manager.get_interface_mac(ap_iface)
             print "[{0}+{1}] Changing {2} MAC addr (BSSID) to {3}".format(G, W, ap_iface, ap_mac)
@@ -631,6 +641,8 @@ class WifiphisherEngine:
             enctype = None
         else:
             # let user choose access point
+            # start the monitor adapter
+            self.network_manager.up_interface(mon_iface)
             ap_info_object = tui.ApSelInfo(mon_iface, self.mac_matcher,
                                            self.network_manager, args)
             ap_sel_object = tui.TuiApSel()
@@ -649,7 +661,7 @@ class WifiphisherEngine:
         # create a template manager object
         self.template_manager = phishingpage.TemplateManager()
         # get the correct template
-        tui_template_obj = tui.TuiTemplateSelection() 
+        tui_template_obj = tui.TuiTemplateSelection()
         template = tui_template_obj.gather_info(args.phishingscenario, self.template_manager)
         print ("[" + G + "+" + W + "] Selecting " +
                template.get_display_name() + " template")
@@ -704,8 +716,10 @@ class WifiphisherEngine:
 
         # We want to set this now for hostapd. Maybe the interface was in "monitor"
         # mode for network discovery before (e.g. when --nojamming is enabled).
+        self.network_manager.down_interface(ap_iface)
         self.network_manager.set_interface_mode(ap_iface, "managed")
         # Start AP
+        self.network_manager.up_interface(ap_iface)
         self.access_point.set_interface(ap_iface)
         self.access_point.set_channel(channel)
         self.access_point.set_essid(essid)
@@ -740,6 +754,7 @@ class WifiphisherEngine:
         if not args.nojamming:
             # Start Extension Manager
             shared_data = {
+                'is_freq_hop_allowed': is_freq_hop_allowed,
                 'target_ap_channel': channel or "",
                 'target_ap_essid': essid or "",
                 'target_ap_bssid': ap_mac or "",
@@ -749,6 +764,7 @@ class WifiphisherEngine:
                 'APs': APs_context,
                 'args': args
             }
+
             self.em.set_interface(mon_iface)
             extensions = DEFAULT_EXTENSIONS
             if args.lure10_exploit:

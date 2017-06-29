@@ -53,6 +53,7 @@ class ExtensionManager(object):
         self._extensions = []
         self._interface = None
         self._socket = None
+        self._is_freq_hop_allowed = True
         self._should_continue = True
         self._packets_to_send = {str(k): [] for k in range(1, 12)}
         self._packets_to_send["*"] = []
@@ -133,6 +134,7 @@ class ExtensionManager(object):
         # Convert shared_data from dict to named tuple
         shared_data = collections.namedtuple('GenericDict',
                                              shared_data.keys())(**shared_data)
+        self._is_freq_hop_allowed = shared_data.is_freq_hop_allowed
         # Initialize all extensions with the shared data
         for extension in self._extensions_str:
             mod = importlib.import_module(
@@ -162,7 +164,8 @@ class ExtensionManager(object):
         self._send_thread.start()
         # daemon for channel hopping
         self.get_channels()
-        self._channelhop_thread.start()
+        if self._is_freq_hop_allowed:
+            self._channelhop_thread.start()
 
     def on_exit(self):
         """
@@ -179,14 +182,14 @@ class ExtensionManager(object):
             self._listen_thread.join(3)
         if self._send_thread.is_alive():
             self._send_thread.join(3)
-        if self._channelhop_thread.is_alive():
+        if self._is_freq_hop_allowed and\
+                self._channelhop_thread.is_alive():
             self._send_thread.join(3)
         # Close socket if it's open
         try:
             self._socket.close()
         except AttributeError:
             pass
-            
 
     def get_channels(self):
         """

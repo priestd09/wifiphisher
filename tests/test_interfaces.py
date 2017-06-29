@@ -571,9 +571,7 @@ class TestNetworkManager(unittest.TestCase):
 
         self.network_manager.set_interface_mode(interface_name, mode)
 
-        pyric.down.assert_called_once_with(interface_object)
         pyric.modeset.assert_called_once_with(interface_object, mode)
-        pyric.up.assert_called_once_with(interface_object)
 
     def test_get_interface_no_interface_error(self):
         """
