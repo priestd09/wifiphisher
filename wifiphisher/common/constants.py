@@ -42,6 +42,8 @@ INTEFERING_PROCS = ["wpa_action", "wpa_supplicant", "wpa_cli", "dhclient",
                     "avahi-autoipd", "avahi-daemon", "wlassistant",
                     "wifibox"]
 
+AP_RATES = "\x0c\x12\x18\x24\x30\x48\x60\x6c"
+
 # Console colors
 W = '\033[0m'    # white (normal)
 R = '\033[31m'   # red
